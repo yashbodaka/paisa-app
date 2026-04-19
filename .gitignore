@@ -1,0 +1,11 @@
+.gradle/
+.gradle-bootstrap/
+.android-sdk/
+.idea/
+build/
+local.properties
+captures/
+*.iml
+*.apk
+*.aab
+app/build/
