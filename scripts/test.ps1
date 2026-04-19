@@ -1,8 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-if (-not $env:JAVA_HOME) {
-    Write-Host "JAVA_HOME is not set. Android Studio usually provides a bundled JDK, or install JDK 17+."
-}
+. "$PSScriptRoot\ensure-java.ps1"
+$env:GRADLE_USER_HOME = Join-Path (Get-Location) ".gradle"
 
 .\gradlew.bat :app:testDebugUnitTest
-
+exit $LASTEXITCODE

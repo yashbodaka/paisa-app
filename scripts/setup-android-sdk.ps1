@@ -44,10 +44,9 @@ Write-Host "Accept Android SDK licenses when prompted."
 & $sdkManager --sdk_root=$sdkDir --licenses
 
 Write-Host "Installing Android SDK packages..."
-& $sdkManager --sdk_root=$sdkDir "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+& $sdkManager --sdk_root=$sdkDir "platform-tools" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0"
 
 Write-Host "Android SDK is ready."
 Write-Host "Next:"
 Write-Host ".\scripts\test.ps1"
 Write-Host ".\scripts\build-debug-apk.ps1"
-
