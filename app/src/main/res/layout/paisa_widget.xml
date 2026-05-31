@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="16dp">
+
+    <!-- Header Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Paisa Logbook"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#4E342E"
+            android:fontFamily="sans-serif-condensed-medium" />
+
+        <TextView
+            android:id="@+id/widget_wallet_balance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Wallet: ₹0"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#4E342E"
+            android:fontFamily="sans-serif-condensed-medium" />
+    </LinearLayout>
+
+    <!-- Stats & Subtitle -->
+    <TextView
+        android:id="@+id/widget_today_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="Spent ₹0 today"
+        android:textSize="12sp"
+        android:textColor="#8D6E63"
+        android:fontFamily="sans-serif-light" />
+
+    <!-- Divider Line -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#EDE4D3" />
+
+    <!-- Recent Entry Container -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="8dp">
+
+        <!-- When empty, show fallback text -->
+        <TextView
+            android:id="@+id/widget_empty_state_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:text="No transactions logged today.\nTry typing '200 food' or tap mic!"
+            android:textSize="12sp"
+            android:textColor="#8D6E63"
+            android:fontFamily="sans-serif-light"
+            android:visibility="gone" />
+
+        <!-- When has transaction, show this layout -->
+        <LinearLayout
+            android:id="@+id/widget_recent_item_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:background="#F7F1E5"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/widget_recent_category"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Food"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="#4E342E"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
+
+            <TextView
+                android:id="@+id/widget_recent_note"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginLeft="8dp"
+                android:layout_marginRight="8dp"
+                android:text="lunch at office"
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#4E342E"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/widget_recent_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="₹120.00"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#8C1D18"
+                android:fontFamily="sans-serif-condensed" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Action Buttons Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <!-- Keyboard Quick Log Button -->
+        <LinearLayout
+            android:id="@+id/widget_btn_log"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginRight="8dp"
+            android:background="@drawable/widget_button_bg"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_home_handdrawn"
+                android:tint="#4E342E" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:text="Quick Log"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#4E342E"
+                android:fontFamily="sans-serif-condensed" />
+        </LinearLayout>
+
+        <!-- Speak Entry Button -->
+        <LinearLayout
+            android:id="@+id/widget_btn_speak"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_button_bg"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_mic_handdrawn"
+                android:tint="#4E342E" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:text="Speak"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#4E342E"
+                android:fontFamily="sans-serif-condensed" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

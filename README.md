@@ -53,6 +53,7 @@ Convenience scripts are available:
 .\scripts\setup-android-sdk.ps1
 .\scripts\test.ps1
 .\scripts\build-debug-apk.ps1
+.\scripts\install-debug-apk.ps1
 ```
 
 See `docs/local-android-setup.md` for laptop setup notes and common fixes.

@@ -11,9 +11,12 @@ import kotlin.math.abs
 
 data class MoneySummary(
     val todaySpendingPaise: Long = 0,
+    val todayNetPaise: Long = 0,
     val weekSpendingPaise: Long = 0,
+    val weekNetPaise: Long = 0,
     val monthIncomePaise: Long = 0,
     val monthExpensePaise: Long = 0,
+    val totalBalancePaise: Long = 0,
     val topCategory: String = "none",
     val weeklyDeltaPaise: Long = 0
 )
@@ -37,13 +40,16 @@ object SummaryCalculator {
         val previousWeekStart = weekStart.minusDays(7)
         val monthStart = today.withDayOfMonth(1)
 
-        val todaySpending = transactions
-            .filter { it.type == TransactionType.EXPENSE && it.localDate(zone) == today }
-            .sumOf { it.amountPaise }
+        val totalIncome = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise }
+        val totalExpense = transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountPaise }
 
-        val weekSpending = transactions
-            .filter { it.type == TransactionType.EXPENSE && it.localDate(zone) >= weekStart }
-            .sumOf { it.amountPaise }
+        val todayTransactions = transactions.filter { it.localDate(zone) == today }
+        val todayIncome = todayTransactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise }
+        val todayExpense = todayTransactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountPaise }
+
+        val weekTransactions = transactions.filter { it.localDate(zone) >= weekStart }
+        val weekIncome = weekTransactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise }
+        val weekExpense = weekTransactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountPaise }
 
         val previousWeekSpending = transactions
             .filter {
@@ -68,12 +74,15 @@ object SummaryCalculator {
             ?: "none"
 
         return MoneySummary(
-            todaySpendingPaise = todaySpending,
-            weekSpendingPaise = weekSpending,
+            todaySpendingPaise = todayExpense,
+            todayNetPaise = todayIncome - todayExpense,
+            weekSpendingPaise = weekExpense,
+            weekNetPaise = weekIncome - weekExpense,
             monthIncomePaise = monthIncome,
             monthExpensePaise = monthExpense,
+            totalBalancePaise = totalIncome - totalExpense,
             topCategory = topCategory,
-            weeklyDeltaPaise = weekSpending - previousWeekSpending
+            weeklyDeltaPaise = weekExpense - previousWeekSpending
         )
     }
 

@@ -15,9 +15,11 @@ interface TransactionDao {
     suspend fun getTransactions(): List<MoneyTransaction>
 
     @Insert
-    suspend fun insert(transaction: MoneyTransaction)
+    suspend fun insert(transaction: MoneyTransaction): Long
+
+    @androidx.room.Update
+    suspend fun update(transaction: MoneyTransaction)
 
     @Delete
     suspend fun delete(transaction: MoneyTransaction)
 }
-

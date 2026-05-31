@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 
+. "$PSScriptRoot\ensure-java.ps1"
+
 $sdkDir = Join-Path (Get-Location) ".android-sdk"
 $zipPath = Join-Path $sdkDir "commandlinetools-win.zip"
 $tempDir = Join-Path $sdkDir "_temp"

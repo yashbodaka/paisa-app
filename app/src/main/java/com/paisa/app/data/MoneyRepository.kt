@@ -10,8 +10,8 @@ class MoneyRepository(
 
     suspend fun getTransactions(): List<MoneyTransaction> = dao.getTransactions()
 
-    suspend fun add(parsed: ParsedMoneyEntry) {
-        dao.insert(
+    suspend fun add(parsed: ParsedMoneyEntry): Long {
+        return dao.insert(
             MoneyTransaction(
                 amountPaise = parsed.amountPaise,
                 type = parsed.type,
@@ -23,8 +23,15 @@ class MoneyRepository(
         )
     }
 
+    suspend fun addTransaction(transaction: MoneyTransaction): Long {
+        return dao.insert(transaction)
+    }
+
+    suspend fun update(transaction: MoneyTransaction) {
+        dao.update(transaction)
+    }
+
     suspend fun delete(transaction: MoneyTransaction) {
         dao.delete(transaction)
     }
 }
-

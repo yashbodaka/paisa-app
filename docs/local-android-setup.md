@@ -46,6 +46,12 @@ The APK will be created at:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
+Install the debug APK on a connected Android phone:
+
+```powershell
+.\scripts\install-debug-apk.ps1
+```
+
 ## Common Fixes
 
 If Gradle says `JAVA_HOME is set to an invalid directory`, update `JAVA_HOME` to a real JDK path.

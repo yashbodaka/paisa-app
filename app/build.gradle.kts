@@ -8,6 +8,10 @@ android {
     namespace = "com.paisa.app"
     compileSdk = 35
 
+    aaptOptions {
+        noCompress += listOf("onnx", "tflite")
+    }
+
     defaultConfig {
         applicationId = "com.paisa.app"
         minSdk = 26
@@ -16,6 +20,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // Only include the architecture used by modern physical phones.
+            // This removes x86, x86_64, and old arm-v7a libraries.
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -73,6 +83,17 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Offline Speech-to-Text (Vosk)
+    implementation("com.alphacephei:vosk-android:0.3.38@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+
+    // On-device NLP (Entity Extraction)
+    implementation("com.google.mlkit:entity-extraction:16.0.0-beta5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    // On-device NLP (Categorization via MediaPipe)
+    implementation("com.google.mediapipe:tasks-text:0.10.14")
+    
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

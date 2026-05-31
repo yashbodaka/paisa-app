@@ -8,12 +8,16 @@ import com.paisa.app.data.MoneyTransaction
 import com.paisa.app.data.PaisaDatabase
 import com.paisa.app.data.TransactionType
 import com.paisa.app.domain.MoneyParser
+import com.paisa.app.domain.NlpCategorizer
+import com.paisa.app.domain.NlpManager
 import com.paisa.app.domain.ParseResult
 import com.paisa.app.domain.SummaryCalculator
 import com.paisa.app.domain.formatInr
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import android.util.Log
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -22,19 +26,34 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = MoneyRepository(PaisaDatabase.getDatabase(application).transactionDao())
     private val parser = MoneyParser()
     private val draft = MutableStateFlow("")
+    private val isListening = MutableStateFlow(false)
+    private val isTranscribing = MutableStateFlow(false)
+    private val nlpManager = NlpManager(application)
+    private val nlpCategorizer = NlpCategorizer(application)
+    private val isLoading = MutableStateFlow(true)
+
+    init {
+        viewModelScope.launch {
+            nlpCategorizer.init()
+            kotlinx.coroutines.delay(1200)
+            isLoading.value = false
+        }
+    }
     private val message = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<PaisaUiState> = combine(
-        repository.observeTransactions(),
-        draft,
-        message
-    ) { transactions, currentDraft, currentMessage ->
+        combine(repository.observeTransactions(), draft, isListening) { txns, d, l -> Triple(txns, d, l) },
+        combine(isTranscribing, message, isLoading) { t, m, i -> Triple(t, m, i) }
+    ) { (txns, currentDraft, listening), (transcribing, currentMessage, loading) ->
         PaisaUiState(
             draft = currentDraft,
-            transactions = transactions,
-            summary = SummaryCalculator.buildSummary(transactions),
-            people = SummaryCalculator.peopleBalances(transactions),
-            suggestions = buildSuggestions(transactions),
+            isListening = listening,
+            isTranscribing = transcribing,
+            isLoading = loading,
+            transactions = txns,
+            summary = SummaryCalculator.buildSummary(txns),
+            people = SummaryCalculator.peopleBalances(txns),
+            suggestions = buildSuggestions(txns),
             message = currentMessage
         )
     }.stateIn(
@@ -47,12 +66,38 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
         draft.value = value
     }
 
+    fun toggleListening() {
+        isListening.value = !isListening.value
+    }
+
+    fun setListening(active: Boolean) {
+        isListening.value = active
+    }
+
+    fun setTranscribing(active: Boolean) {
+        isTranscribing.value = active
+    }
+
+    /** Called by PaisaRoute when Vosk returns a transcription. */
+    fun onTranscribed(text: String) {
+        isTranscribing.value = false
+        if (text.isNotBlank()) {
+            draft.value = text
+            viewModelScope.launch {
+                val nlpAmount = nlpManager.findAmountPaise(text)
+                submitText(text, nlpAmount)
+            }
+        } else {
+            message.value = "Couldn't understand — please try again"
+        }
+    }
+
     fun submitDraft() {
         submitText(draft.value)
     }
 
-    fun submitText(text: String) {
-        when (val result = parser.parse(text)) {
+    fun submitText(text: String, nlpAmount: Long? = null) {
+        when (val result = parser.parse(text, nlpAmount, nlpCategorizer)) {
             is ParseResult.Error -> message.value = result.message
             is ParseResult.Success -> viewModelScope.launch {
                 repository.add(result.entry)
@@ -66,6 +111,56 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.delete(transaction)
             message.value = "Deleted entry"
+        }
+    }
+
+    fun syncSms() {
+        viewModelScope.launch {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(getApplication(), android.Manifest.permission.READ_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                message.value = "Scanning recent SMS..."
+                try {
+                    // Run the DB query on IO dispatcher
+                    val found = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        var count = 0
+                        val cursor = getApplication<Application>().contentResolver.query(
+                            android.provider.Telephony.Sms.Inbox.CONTENT_URI,
+                            arrayOf(android.provider.Telephony.Sms.Inbox.BODY, android.provider.Telephony.Sms.Inbox.ADDRESS),
+                            null,
+                            null,
+                            "${android.provider.Telephony.Sms.Inbox.DATE} DESC LIMIT 50"
+                        )
+                        cursor?.use { c ->
+                            val bodyIdx = c.getColumnIndexOrThrow(android.provider.Telephony.Sms.Inbox.BODY)
+                            val addrIdx = c.getColumnIndexOrThrow(android.provider.Telephony.Sms.Inbox.ADDRESS)
+                            while (c.moveToNext()) {
+                                val body = c.getString(bodyIdx) ?: continue
+                                val lowerBody = body.lowercase()
+                                val bankPattern = Regex("(dr|cr)\\s+inr", RegexOption.IGNORE_CASE)
+                                val upiPattern = Regex("upi/", RegexOption.IGNORE_CASE)
+                                val isBankSms = bankPattern.containsMatchIn(lowerBody) || upiPattern.containsMatchIn(lowerBody)
+                                if (isBankSms) {
+                                    val result = parser.parse(body, null, nlpCategorizer)
+                                    if (result is ParseResult.Success) {
+                                        // Simple deduplication
+                                        val existing = repository.getTransactions()
+                                        val already = existing.any { t -> t.amountPaise == result.entry.amountPaise && t.rawText == result.entry.rawText }
+                                        if (!already) {
+                                            repository.add(result.entry)
+                                            count++
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        count
+                    }
+                    message.value = if (found > 0) "Synced $found new transaction(s) from SMS" else "No new transactions found in recent SMS"
+                } catch (e: Exception) {
+                    message.value = "Failed to sync SMS: ${e.message}"
+                }
+            } else {
+                message.value = "SMS permission not granted. Please allow in settings."
+            }
         }
     }
 
@@ -92,5 +187,17 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
 
         return (categories + people).take(6).toList()
     }
-}
 
+    fun updateTransaction(transaction: MoneyTransaction) {
+        viewModelScope.launch {
+            repository.update(transaction)
+            message.value = "Updated entry"
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        nlpManager.close()
+        nlpCategorizer.close()
+    }
+}

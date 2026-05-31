@@ -6,6 +6,9 @@ import com.paisa.app.domain.PersonBalance
 
 data class PaisaUiState(
     val draft: String = "",
+    val isListening: Boolean = false,
+    val isTranscribing: Boolean = false,
+    val isLoading: Boolean = true,
     val transactions: List<MoneyTransaction> = emptyList(),
     val summary: MoneySummary = MoneySummary(),
     val people: List<PersonBalance> = emptyList(),
