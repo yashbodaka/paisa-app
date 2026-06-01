@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -739,9 +740,12 @@ private fun InsightsContent(
     var trendFilter by rememberSaveable { mutableStateOf("7D") }
     var selectedCategory by rememberSaveable { mutableStateOf("All") }
 
+    var activeDrillDownCategory by remember { mutableStateOf<String?>(null) }
+    var activeDrillDownDate by remember { mutableStateOf<String?>(null) }
+
     val categories = remember(transactions) {
         listOf("All") + transactions
-            .filter { it.type == TransactionType.EXPENSE || it.type == TransactionType.LENT }
+            .filter { it.type == TransactionType.EXPENSE }
             .map { it.category }
             .distinct()
             .sorted()
@@ -750,115 +754,302 @@ private fun InsightsContent(
         filteredInsightExpenses(transactions, trendFilter, selectedCategory)
     }
     val periodTotal = filteredExpenses.sumOf { it.amountPaise }
+
+    val priorPeriodExpenses = remember(transactions, trendFilter, selectedCategory) {
+        val zone = ZoneId.systemDefault()
+        val today = Instant.now().atZone(zone).toLocalDate()
+        
+        transactions.filter { transaction ->
+            val isSpend = transaction.type == TransactionType.EXPENSE
+            val categoryMatches = selectedCategory == "All" || transaction.category == selectedCategory
+            val date = Instant.ofEpochMilli(transaction.createdAt).atZone(zone).toLocalDate()
+            val periodMatches = when (trendFilter) {
+                "7D" -> {
+                    date.isAfter(today.minusDays(15)) && date.isBefore(today.minusDays(6))
+                }
+                "30D" -> {
+                    date.isAfter(today.minusDays(61)) && date.isBefore(today.minusDays(29))
+                }
+                else -> false
+            }
+            isSpend && categoryMatches && periodMatches
+        }
+    }
+    val priorTotal = priorPeriodExpenses.sumOf { it.amountPaise }
+    val comparisonText = remember(periodTotal, priorTotal, trendFilter) {
+        if (trendFilter == "All") "" else {
+            if (priorTotal == 0L) {
+                if (periodTotal == 0L) "No change" else "New activity"
+            } else {
+                val percentShift = ((periodTotal - priorTotal).toFloat() / priorTotal.toFloat() * 100f).roundToInt()
+                val direction = if (percentShift >= 0) "↑" else "↓"
+                val windowLabel = if (trendFilter == "7D") "vs last week" else "vs last month"
+                "$direction ${Math.abs(percentShift)}% $windowLabel"
+            }
+        }
+    }
+
     val topCategory = filteredExpenses
         .groupBy { it.category }
         .mapValues { entry -> entry.value.sumOf { it.amountPaise } }
         .maxByOrNull { it.value }
-    val averageSpend = if (filteredExpenses.isEmpty()) 0L else periodTotal / filterWindowDays(trendFilter, filteredExpenses)
+    val averageSpend = if (filteredExpenses.isEmpty()) 0L else periodTotal / filterWindowDays(trendFilter, transactions)
     val insightLine = when {
         filteredExpenses.isEmpty() -> "No spending signal yet for this filter."
         topCategory != null -> "${topCategory.key.toTitleCase()} is leading this view at ${topCategory.value.formatInr()}."
         else -> "Your spending is spread evenly in this view."
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        InsightsHeroCard(
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            periodLabel = trendFilter,
-            amount = periodTotal.formatInr(),
-            insight = insightLine,
-            topCategory = topCategory?.key?.toTitleCase() ?: "No category yet"
-        )
-
-        InsightFilterDeck(
-            trendFilter = trendFilter,
-            selectedCategory = selectedCategory,
-            categories = categories,
-            onTrendSelected = { trendFilter = it },
-            onCategorySelected = { selectedCategory = it }
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            MiniInsightCard(
-                modifier = Modifier.weight(1f).height(116.dp),
-                label = "In Filter",
-                value = periodTotal.formatInr(),
-                caption = "${filteredExpenses.size} entries",
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                seed = 21
+            InsightsHeroCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                periodLabel = trendFilter,
+                amount = periodTotal.formatInr(),
+                insight = insightLine,
+                topCategory = topCategory?.key?.toTitleCase() ?: "No category yet",
+                comparison = comparisonText
             )
-            MiniInsightCard(
-                modifier = Modifier.weight(1f).height(116.dp),
-                label = "Daily Pace",
-                value = averageSpend.formatInr(),
-                caption = when (trendFilter) {
-                    "All" -> "active days"
-                    else -> "avg per day"
-                },
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                seed = 22
+
+            InsightFilterDeck(
+                trendFilter = trendFilter,
+                selectedCategory = selectedCategory,
+                categories = categories,
+                onTrendSelected = { trendFilter = it },
+                onCategorySelected = { selectedCategory = it }
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MiniInsightCard(
+                    modifier = Modifier.weight(1f).height(116.dp),
+                    label = "In Filter",
+                    value = periodTotal.formatInr(),
+                    caption = "${filteredExpenses.size} entries",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    seed = 21
+                )
+                MiniInsightCard(
+                    modifier = Modifier.weight(1f).height(116.dp),
+                    label = "Daily Pace",
+                    value = averageSpend.formatInr(),
+                    caption = when (trendFilter) {
+                        "All" -> "active days"
+                        else -> "avg per day"
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    seed = 22
+                )
+            }
+
+            HandDrawnBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                rotation = 0.5f,
+                seed = 13
+            ) {
+                DailySpendingLineChart(
+                    transactions = transactions,
+                    filter = trendFilter,
+                    category = selectedCategory,
+                    onPointClick = { dateKey ->
+                        activeDrillDownDate = dateKey
+                    }
+                )
+            }
+
+            HandDrawnBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                rotation = -0.5f,
+                seed = 12
+            ) {
+                SpendingBarChart(
+                    transactions = transactions,
+                    onCategoryClick = { catName ->
+                        activeDrillDownCategory = catName
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MiniInsightCard(
+                    modifier = Modifier.weight(1f).height(110.dp),
+                    label = "This Month",
+                    value = summary.monthExpensePaise.formatInr(),
+                    caption = "spent so far",
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    seed = 23
+                )
+                MiniInsightCard(
+                    modifier = Modifier.weight(1f).height(110.dp),
+                    label = "Top Category",
+                    value = summary.topCategory.toTitleCase(),
+                    caption = if (summary.topCategory == "none") "not enough data" else "highest category",
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    seed = 24
+                )
+            }
         }
 
-        HandDrawnBox(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            rotation = 0.5f,
-            seed = 13
-        ) {
-            DailySpendingLineChart(
-                transactions = transactions,
-                filter = trendFilter,
-                category = selectedCategory
-            )
+        val drillDownTransactions = remember(transactions, activeDrillDownCategory, activeDrillDownDate) {
+            val zone = ZoneId.systemDefault()
+            transactions.filter {
+                val catMatch = activeDrillDownCategory == null || it.category == activeDrillDownCategory
+                val dateMatch = activeDrillDownDate == null || {
+                    val dt = Instant.ofEpochMilli(it.createdAt).atZone(zone)
+                    val dateStr = dt.toLocalDate().toString()
+                    if (trendFilter == "7D") {
+                        val hour = dt.hour
+                        val period = when {
+                            hour < 12 -> "Morning"
+                            hour < 17 -> "Afternoon"
+                            hour < 21 -> "Evening"
+                            else -> "Night"
+                        }
+                        "$dateStr $period" == activeDrillDownDate
+                    } else {
+                        dateStr == activeDrillDownDate
+                    }
+                }()
+                catMatch && dateMatch && (it.type == TransactionType.EXPENSE)
+            }.sortedByDescending { it.createdAt }
         }
 
-        HandDrawnBox(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            rotation = -0.5f,
-            seed = 12
+        AnimatedVisibility(
+            visible = activeDrillDownCategory != null || activeDrillDownDate != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
-            SpendingBarChart(transactions = transactions)
-        }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f))
+                    .clickable {
+                        activeDrillDownCategory = null
+                        activeDrillDownDate = null
+                    },
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                HandDrawnBox(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.6f)
+                        .clickable(enabled = false) {},
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    rotation = 0f,
+                    seed = 77
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = when {
+                                    activeDrillDownCategory != null -> "Drill-down: ${activeDrillDownCategory?.toTitleCase()}"
+                                    activeDrillDownDate != null -> "Drill-down: $activeDrillDownDate"
+                                    else -> "Drill-down"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            MiniInsightCard(
-                modifier = Modifier.weight(1f).height(110.dp),
-                label = "This Month",
-                value = summary.monthExpensePaise.formatInr(),
-                caption = "spent so far",
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                seed = 23
-            )
-            MiniInsightCard(
-                modifier = Modifier.weight(1f).height(110.dp),
-                label = "Top Month",
-                value = summary.topCategory.toTitleCase(),
-                caption = if (summary.topCategory == "none") "not enough data" else "highest category",
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                seed = 24
-            )
-        }
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.bouncyClickable {
+                                    activeDrillDownCategory = null
+                                    activeDrillDownDate = null
+                                }
+                            ) {
+                                Icon(
+                                    painterResource(R.drawable.ic_close_handdrawn),
+                                    contentDescription = "Close",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
 
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (drillDownTransactions.isEmpty()) {
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No transactions found.", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(drillDownTransactions) { transaction ->
+                                    HandDrawnBox(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        rotation = if (transaction.id.hashCode() % 2 == 0) 0.3f else -0.3f,
+                                        seed = transaction.id.hashCode()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = transaction.note.ifBlank { transaction.category.toTitleCase() },
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    text = Instant.ofEpochMilli(transaction.createdAt)
+                                                        .atZone(ZoneId.systemDefault())
+                                                        .toLocalDate()
+                                                        .toString(),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Text(
+                                                text = transaction.amountPaise.formatInr(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -868,7 +1059,8 @@ private fun InsightsHeroCard(
     periodLabel: String,
     amount: String,
     insight: String,
-    topCategory: String
+    topCategory: String,
+    comparison: String = ""
 ) {
     HandDrawnBox(
         modifier = modifier,
@@ -904,16 +1096,36 @@ private fun InsightsHeroCard(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.78f)
                     )
-                    Surface(
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.14f),
-                        shape = HandDrawnShapeChip
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            periodLabel,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.inverseOnSurface
-                        )
+                        if (comparison.isNotBlank()) {
+                            val isNegative = comparison.contains("↓")
+                            Surface(
+                                color = if (isNegative) Color(0xFF2E7D32).copy(alpha = 0.25f) else Color(0xFFC62828).copy(alpha = 0.25f),
+                                shape = HandDrawnShapeChip
+                            ) {
+                                Text(
+                                    comparison,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isNegative) Color(0xFF81C784) else Color(0xFFE57373),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Surface(
+                            color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.14f),
+                            shape = HandDrawnShapeChip
+                        ) {
+                            Text(
+                                periodLabel,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.inverseOnSurface
+                            )
+                        }
                     }
                 }
 
@@ -1022,8 +1234,11 @@ private fun MiniInsightCard(
 }
 
 @Composable
-private fun SpendingBarChart(transactions: List<MoneyTransaction>) {
-    val expenses = transactions.filter { it.type == TransactionType.EXPENSE || it.type == TransactionType.LENT }
+private fun SpendingBarChart(
+    transactions: List<MoneyTransaction>,
+    onCategoryClick: (String) -> Unit
+) {
+    val expenses = transactions.filter { it.type == TransactionType.EXPENSE }
     if (expenses.isEmpty()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text("Category Mix", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
@@ -1033,28 +1248,35 @@ private fun SpendingBarChart(transactions: List<MoneyTransaction>) {
     }
 
     val grouped = expenses.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amountPaise } }
-    val maxAmount = grouped.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-    val sorted = grouped.entries.sortedByDescending { it.value }.take(5)
+    val sortedEntries = grouped.entries.sortedByDescending { it.value }
+    
+    val displayList = if (sortedEntries.size <= 5) {
+        sortedEntries
+    } else {
+        val top4 = sortedEntries.take(4)
+        val remainingSum = sortedEntries.drop(4).sumOf { it.value }
+        top4 + java.util.AbstractMap.SimpleEntry("Others", remainingSum)
+    }
+
+    val maxAmount = displayList.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
+    val outlineColor = MaterialTheme.colorScheme.outline
 
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
         Text("Category Mix", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Where your money clusters most often.",
+            "Where your money clusters most often. Tap a bar to view entries.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 3.dp, bottom = 16.dp)
         )
         
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val colors = listOf(
-                MaterialTheme.colorScheme.primaryContainer,
-                MaterialTheme.colorScheme.secondaryContainer,
-                MaterialTheme.colorScheme.tertiaryContainer,
-                MaterialTheme.colorScheme.errorContainer,
-                MaterialTheme.colorScheme.surfaceVariant
-            )
+            val baseColor = MaterialTheme.colorScheme.primary
+            val colors = List(displayList.size) { index ->
+                baseColor.copy(alpha = 1f - (index * 0.18f).coerceAtMost(0.7f))
+            }
 
-            sorted.forEachIndexed { index, entry ->
+            displayList.forEachIndexed { index, entry ->
                 val ratio = entry.value.toFloat() / maxAmount
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1070,15 +1292,47 @@ private fun SpendingBarChart(transactions: List<MoneyTransaction>) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(24.dp)
+                            .height(24.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        HandDrawnBox(
+                        Canvas(
                             modifier = Modifier
                                 .fillMaxWidth(ratio.coerceAtLeast(0.05f))
-                                .fillMaxHeight(),
-                            containerColor = colors[index % colors.size],
-                            seed = entry.key.hashCode()
-                        ) { }
+                                .fillMaxHeight()
+                                .bouncyClickable {
+                                    onCategoryClick(entry.key)
+                                }
+                        ) {
+                            val w = size.width
+                            val h = size.height
+                            
+                            if (w > 0f) {
+                                val r = Random(entry.key.hashCode().toLong())
+                                val path = buildWobblyRectPath(w, h, r, jitter = 1.5f)
+                                drawPath(path, color = colors[index % colors.size], style = Fill)
+                                
+                                for (pass in 0 until 2) {
+                                    val passRandom = Random(entry.key.hashCode().toLong() + pass + 100L)
+                                    val offsetX = (passRandom.nextFloat() - 0.5f) * 1.5f
+                                    val offsetY = (passRandom.nextFloat() - 0.5f) * 1.5f
+                                    val strokeWidth = 1f + passRandom.nextFloat() * 1f
+                                    val strokePath = buildWobblyRectPath(w, h, passRandom, jitter = 1.5f + pass * 0.5f)
+                                    
+                                    drawContext.canvas.save()
+                                    drawContext.canvas.translate(offsetX, offsetY)
+                                    drawPath(
+                                        strokePath,
+                                        color = outlineColor.copy(alpha = 0.5f + pass * 0.2f),
+                                        style = Stroke(
+                                            width = strokeWidth,
+                                            cap = StrokeCap.Round,
+                                            join = StrokeJoin.Round
+                                        )
+                                    )
+                                    drawContext.canvas.restore()
+                                }
+                            }
+                        }
                     }
                     
                     Text(
@@ -1098,10 +1352,11 @@ private fun SpendingBarChart(transactions: List<MoneyTransaction>) {
 private fun DailySpendingLineChart(
     transactions: List<MoneyTransaction>,
     filter: String,
-    category: String
+    category: String,
+    onPointClick: (String) -> Unit
 ) {
     val expenses = transactions.filter { 
-        (it.type == TransactionType.EXPENSE || it.type == TransactionType.LENT) &&
+        (it.type == TransactionType.EXPENSE) &&
         (category == "All" || it.category == category)
     }
 
@@ -1137,9 +1392,7 @@ private fun DailySpendingLineChart(
         return
     }
 
-    // Grouping by String key for consistent sorting
     val groupedData: Map<String, Long> = if (filter == "7D") {
-        // Detailed view: Group by Day + Period (Morning, Afternoon, Evening, Night)
         filteredExpenses.groupBy { 
             val dt = Instant.ofEpochMilli(it.createdAt).atZone(zone)
             val date = dt.toLocalDate()
@@ -1158,7 +1411,39 @@ private fun DailySpendingLineChart(
         }.mapValues { it.value.sumOf { t -> t.amountPaise } }
     }
 
-    val sortedKeys = groupedData.keys.sorted()
+    val sortedKeys = groupedData.keys.sortedWith(Comparator { k1, k2 ->
+        if (filter == "7D") {
+            val s1 = k1.split(" ")
+            val s2 = k2.split(" ")
+            if (s1.size == 2 && s2.size == 2) {
+                val dateCompare = s1[0].compareTo(s2[0])
+                if (dateCompare != 0) {
+                    dateCompare
+                } else {
+                    val p1Rank = when (s1[1]) {
+                        "Morning" -> 0
+                        "Afternoon" -> 1
+                        "Evening" -> 2
+                        "Night" -> 3
+                        else -> 4
+                    }
+                    val p2Rank = when (s2[1]) {
+                        "Morning" -> 0
+                        "Afternoon" -> 1
+                        "Evening" -> 2
+                        "Night" -> 3
+                        else -> 4
+                    }
+                    p1Rank.compareTo(p2Rank)
+                }
+            } else {
+                k1.compareTo(k2)
+            }
+        } else {
+            k1.compareTo(k2)
+        }
+    })
+
     val maxAmount = groupedData.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
     
     var selectedPoint by remember { mutableStateOf<Int?>(null) }
@@ -1191,26 +1476,26 @@ private fun DailySpendingLineChart(
         )
         
         Box(modifier = Modifier.fillMaxWidth().height(180.dp)) {
-            // Y-Axis Labels
             Column(
-                modifier = Modifier.fillMaxHeight().width(40.dp),
+                modifier = Modifier.fillMaxHeight().width(50.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(maxAmount.formatInr(), style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f))
-                Text((maxAmount / 2).formatInr(), style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f))
-                Text("0", style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f))
+                Text(maxAmount.formatInr(), style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f), maxLines = 1)
+                Text((maxAmount / 2).formatInr(), style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f), maxLines = 1)
+                Text("0", style = MaterialTheme.typography.labelSmall, color = outlineColor.copy(alpha = 0.6f), maxLines = 1)
             }
 
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 40.dp, bottom = 20.dp)
+                    .padding(start = 50.dp, bottom = 20.dp)
                     .pointerInput(sortedKeys) {
                         detectTapGestures { offset ->
                             val w = size.width
                             val stepX = w / (sortedKeys.size - 1).coerceAtLeast(1)
                             val idx = (offset.x / stepX).roundToInt().coerceIn(0, sortedKeys.size - 1)
                             selectedPoint = idx
+                            onPointClick(sortedKeys[idx])
                         }
                     }
             ) {
@@ -1218,7 +1503,6 @@ private fun DailySpendingLineChart(
                 val h = size.height
                 val stepX = w / (sortedKeys.size - 1).coerceAtLeast(1)
                 
-                // Grid lines
                 drawLine(color = outlineColor.copy(alpha = 0.1f), start = Offset(0f, h), end = Offset(w, h), strokeWidth = 1f)
                 drawLine(color = outlineColor.copy(alpha = 0.1f), start = Offset(0f, h/2f), end = Offset(w, h/2f), strokeWidth = 1f)
                 drawLine(color = outlineColor.copy(alpha = 0.1f), start = Offset(0f, 0f), end = Offset(w, 0f), strokeWidth = 1f)
@@ -1255,6 +1539,46 @@ private fun DailySpendingLineChart(
                         )
                         if (isSelected) {
                             drawCircle(color = Color.White, radius = 4f, center = pt)
+                            
+                            val key = sortedKeys[idx]
+                            val amount = groupedData[key] ?: 0L
+                            val amountText = amount.formatInr()
+                            
+                            drawContext.canvas.nativeCanvas.apply {
+                                val tooltipW = 120f
+                                val tooltipH = 50f
+                                val rectLeft = (pt.x - tooltipW / 2f).coerceIn(0f, w - tooltipW)
+                                val rectTop = pt.y - tooltipH - 20f
+                                
+                                val r = Random(idx.toLong())
+                                val toolTipPath = buildWobblyRectPath(tooltipW, tooltipH, r, jitter = 1.5f)
+                                
+                                save()
+                                translate(rectLeft, rectTop)
+                                
+                                val fillPaint = android.graphics.Paint().apply {
+                                    color = android.graphics.Color.parseColor("#FFFDF6")
+                                    style = android.graphics.Paint.Style.FILL
+                                }
+                                drawPath(toolTipPath.asAndroidPath(), fillPaint)
+                                
+                                val strokePaint = android.graphics.Paint().apply {
+                                    color = outlineColor.copy(alpha = 0.8f).toArgb()
+                                    style = android.graphics.Paint.Style.STROKE
+                                    strokeWidth = 3f
+                                    strokeCap = android.graphics.Paint.Cap.ROUND
+                                }
+                                drawPath(toolTipPath.asAndroidPath(), strokePaint)
+                                
+                                val textPaint = android.graphics.Paint().apply {
+                                    color = android.graphics.Color.BLACK
+                                    textSize = 20f
+                                    typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                }
+                                drawText(amountText, tooltipW / 2f, tooltipH / 2f + 8f, textPaint)
+                                restore()
+                            }
                         }
                     }
                 }
@@ -1262,7 +1586,7 @@ private fun DailySpendingLineChart(
         }
         
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 40.dp, top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 50.dp, top = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val startLabel = sortedKeys.firstOrNull()?.toString()?.takeLast(5) ?: ""
@@ -1282,7 +1606,7 @@ private fun filteredInsightExpenses(
     val today = Instant.now().atZone(zone).toLocalDate()
 
     return transactions.filter { transaction ->
-        val isSpend = transaction.type == TransactionType.EXPENSE || transaction.type == TransactionType.LENT
+        val isSpend = transaction.type == TransactionType.EXPENSE
         val categoryMatches = category == "All" || transaction.category == category
         val date = Instant.ofEpochMilli(transaction.createdAt).atZone(zone).toLocalDate()
         val periodMatches = when (filter) {
@@ -1295,20 +1619,23 @@ private fun filteredInsightExpenses(
     }
 }
 
-private fun filterWindowDays(filter: String, transactions: List<MoneyTransaction>): Long {
+private fun filterWindowDays(
+    filter: String,
+    allTransactions: List<MoneyTransaction>
+): Long {
+    val zone = ZoneId.systemDefault()
+    val today = Instant.now().atZone(zone).toLocalDate()
+    
+    val oldestTransactionDate = allTransactions.minOfOrNull { it.createdAt }
+        ?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+        ?: today
+
+    val accountAgeDays = java.time.temporal.ChronoUnit.DAYS.between(oldestTransactionDate, today) + 1L
+
     return when (filter) {
-        "7D" -> 7L
-        "30D" -> 30L
-        else -> transactions
-            .map {
-                Instant.ofEpochMilli(it.createdAt)
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate()
-            }
-            .distinct()
-            .size
-            .coerceAtLeast(1)
-            .toLong()
+        "7D" -> minOf(7L, accountAgeDays).coerceAtLeast(1L)
+        "30D" -> minOf(30L, accountAgeDays).coerceAtLeast(1L)
+        else -> accountAgeDays.coerceAtLeast(1L)
     }
 }
 
