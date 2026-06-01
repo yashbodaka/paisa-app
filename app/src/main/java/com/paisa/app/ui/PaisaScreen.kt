@@ -1,10 +1,13 @@
 package com.paisa.app.ui
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -44,6 +47,7 @@ import com.paisa.app.data.TransactionType
 import com.paisa.app.domain.PersonBalance
 import com.paisa.app.domain.formatInr
 import com.paisa.app.domain.formatSignedInr
+import com.paisa.app.ui.theme.bouncyClickable
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -243,66 +247,80 @@ fun PaisaScreen(
         )
     }
 
-    if (state.isLoading) {
-        LoadingScreen()
-    } else {
-        Scaffold(
-            topBar = {
-                CustomHeader(summary = state.summary)
-            },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                NavigationBar {
-                    PaisaTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            icon = { Icon(painterResource(tab.iconRes), contentDescription = null, modifier = Modifier.size(24.dp)) },
-                            label = { Text(tab.label, style = MaterialTheme.typography.bodyMedium) }
-                        )
+    AnimatedContent(
+        targetState = state.isLoading,
+        transitionSpec = {
+            if (targetState) {
+                fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
+            } else {
+                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                 scaleIn(initialScale = 0.94f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)))
+                    .togetherWith(fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.96f, animationSpec = tween(300)))
+            }
+        },
+        label = "screen_transition"
+    ) { isLoading ->
+        if (isLoading) {
+            LoadingScreen()
+        } else {
+            Scaffold(
+                topBar = {
+                    CustomHeader(summary = state.summary)
+                },
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                bottomBar = {
+                    NavigationBar {
+                        PaisaTab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == tab,
+                                onClick = { selectedTab = tab },
+                                icon = { Icon(painterResource(tab.iconRes), contentDescription = null, modifier = Modifier.size(24.dp)) },
+                                label = { Text(tab.label, style = MaterialTheme.typography.bodyMedium) }
+                            )
+                        }
                     }
                 }
-            }
-        ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                Image(
-                    painter = painterResource(R.drawable.bg_doodles),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alpha = 0.06f
-                )
-                
-                when (selectedTab) {
-                    PaisaTab.Home -> HomeContent(
-                        modifier = Modifier,
-                        state = state,
-                        onDraftChange = onDraftChange,
-                        onSubmit = onSubmit,
-                        onSuggestionClick = onSuggestionClick,
-                        onDelete = onDelete,
-                        onEdit = { transactionToEdit = it },
-                        onVoiceClick = onVoiceClick,
-                        isListening = state.isListening,
-                        isTranscribing = state.isTranscribing
+            ) { padding ->
+                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    Image(
+                        painter = painterResource(R.drawable.bg_doodles),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.06f
                     )
-
-                    PaisaTab.History -> HistoryContent(
-                        modifier = Modifier,
-                        transactions = state.transactions,
-                        onDelete = onDelete,
-                        onEdit = { transactionToEdit = it }
-                    )
-
-                    PaisaTab.Insights -> InsightsContent(
-                        modifier = Modifier,
-                        transactions = state.transactions
-                    )
-
-                    PaisaTab.People -> PeopleContent(
-                        modifier = Modifier,
-                        people = state.people
-                    )
+                    
+                    when (selectedTab) {
+                        PaisaTab.Home -> HomeContent(
+                            modifier = Modifier,
+                            state = state,
+                            onDraftChange = onDraftChange,
+                            onSubmit = onSubmit,
+                            onSuggestionClick = onSuggestionClick,
+                            onDelete = onDelete,
+                            onEdit = { transactionToEdit = it },
+                            onVoiceClick = onVoiceClick,
+                            isListening = state.isListening,
+                            isTranscribing = state.isTranscribing
+                        )
+ 
+                        PaisaTab.History -> HistoryContent(
+                            modifier = Modifier,
+                            transactions = state.transactions,
+                            onDelete = onDelete,
+                            onEdit = { transactionToEdit = it }
+                        )
+ 
+                        PaisaTab.Insights -> InsightsContent(
+                            modifier = Modifier,
+                            transactions = state.transactions
+                        )
+ 
+                        PaisaTab.People -> PeopleContent(
+                            modifier = Modifier,
+                            people = state.people
+                        )
+                    }
                 }
             }
         }
@@ -357,7 +375,10 @@ private fun HomeContent(
                 }
             } else {
                 items(state.transactions.take(8), key = { it.id }) { transaction ->
-                    TransactionRow(transaction = transaction, onDelete = onDelete, onEdit = onEdit)
+                    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                    Box(modifier = Modifier.animateItemPlacement()) {
+                        TransactionRow(transaction = transaction, onDelete = onDelete, onEdit = onEdit)
+                    }
                 }
             }
         }
@@ -461,8 +482,11 @@ private fun QuickEntry(
                                 )
                             }
                             IconButton(
-                                onClick = if (isTranscribing) { {} } else onVoiceClick,
-                                enabled = !isTranscribing
+                                onClick = {},
+                                enabled = !isTranscribing,
+                                modifier = Modifier.bouncyClickable(enabled = !isTranscribing) {
+                                    if (!isTranscribing) onVoiceClick()
+                                }
                             ) {
                                 Icon(
                                     painterResource(R.drawable.ic_mic_handdrawn),
@@ -480,7 +504,10 @@ private fun QuickEntry(
                                 )
                             }
                         }
-                        IconButton(onClick = onSubmit) {
+                        IconButton(
+                            onClick = {},
+                            modifier = Modifier.bouncyClickable { onSubmit() }
+                        ) {
                             Icon(painterResource(R.drawable.ic_send_handdrawn), contentDescription = "Log entry", modifier = Modifier.size(24.dp))
                         }
                     }
@@ -510,9 +537,10 @@ private fun SuggestionRow(
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(suggestions) { suggestion ->
             AssistChip(
-                onClick = { onSuggestionClick(suggestion) },
+                onClick = {},
                 label = { Text(suggestion, style = MaterialTheme.typography.bodyMedium) },
-                shape = HandDrawnShapeChip
+                shape = HandDrawnShapeChip,
+                modifier = Modifier.bouncyClickable { onSuggestionClick(suggestion) }
             )
         }
     }
@@ -1365,7 +1393,10 @@ private fun HistoryContent(
                     )
                 }
                 items(dailyTransactions, key = { it.id }) { transaction ->
-                    TransactionRow(transaction = transaction, onDelete = onDelete, onEdit = onEdit)
+                    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                    Box(modifier = Modifier.animateItemPlacement()) {
+                        TransactionRow(transaction = transaction, onDelete = onDelete, onEdit = onEdit)
+                    }
                 }
             }
         }
@@ -1379,7 +1410,7 @@ private fun TransactionRow(
     onEdit: (MoneyTransaction) -> Unit
 ) {
     HandDrawnBox(
-        modifier = Modifier.fillMaxWidth().clickable { onEdit(transaction) },
+        modifier = Modifier.fillMaxWidth().bouncyClickable { onEdit(transaction) },
         containerColor = MaterialTheme.colorScheme.surface,
         rotation = (transaction.id.hashCode() % 3 - 1).toFloat(),
         seed = transaction.id.hashCode()
@@ -1428,7 +1459,10 @@ private fun TransactionRow(
                     fontWeight = FontWeight.Bold,
                     color = transaction.amountColor()
                 )
-                IconButton(onClick = { onDelete(transaction) }) {
+                IconButton(
+                    onClick = {},
+                    modifier = Modifier.bouncyClickable { onDelete(transaction) }
+                ) {
                     Icon(painterResource(R.drawable.ic_delete_handdrawn), contentDescription = "Delete entry", modifier = Modifier.size(24.dp))
                 }
             }
@@ -1605,7 +1639,90 @@ fun EditTransactionSheet(
 }
 
 @Composable
+fun ScribbleCircularLoader(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    strokeWidth: androidx.compose.ui.unit.Dp = 3.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "scribble_loader")
+    val progress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
+    val seedFloat by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "seed"
+    )
+    val seed = seedFloat.toInt()
+    val strokeWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { strokeWidth.toPx() }
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val radius = (minOf(w, h) - strokeWidthPx) / 2f
+
+        if (radius <= 0f) return@Canvas
+
+        val random = java.util.Random(seed.toLong())
+        val path = Path()
+
+        val totalAngles = (360f * progress)
+        val step = 10f // degree steps
+
+        var started = false
+        var angle = 0f
+
+        while (angle <= totalAngles) {
+            val rad = Math.toRadians(angle.toDouble())
+            val jitterRadius = radius + (random.nextFloat() - 0.5f) * 6f
+            val x = cx + Math.cos(rad).toFloat() * jitterRadius
+            val y = cy + Math.sin(rad).toFloat() * jitterRadius
+
+            if (!started) {
+                path.moveTo(x, y)
+                started = true
+            } else {
+                path.lineTo(x, y)
+            }
+            angle += step
+        }
+
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = strokeWidthPx,
+                cap = StrokeCap.Round
+            )
+        )
+    }
+}
+
+@Composable
 private fun LoadingScreen() {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_loading")
+    val textScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "text_scale"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1613,25 +1730,41 @@ private fun LoadingScreen() {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            HandDrawnBox(
-                modifier = Modifier.size(120.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                rotation = 5f,
-                seed = 99
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(170.dp)
             ) {
-                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(R.drawable.app_logo_concept_2),
-                        contentDescription = "Paisa Logo",
-                        modifier = Modifier.fillMaxSize()
-                    )
+                // Scribble Progress Circle spinning around the logo
+                ScribbleCircularLoader(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp
+                )
+
+                HandDrawnBox(
+                    modifier = Modifier.size(100.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    rotation = 5f,
+                    seed = 99
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().padding(14.dp), contentAlignment = Alignment.Center) {
+                        Image(
+                            painter = painterResource(R.drawable.app_logo_concept_2),
+                            contentDescription = "Paisa Logo",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(32.dp))
             Text(
                 "Sketching your finances...",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = textScale
+                    scaleY = textScale
+                }
             )
         }
     }
