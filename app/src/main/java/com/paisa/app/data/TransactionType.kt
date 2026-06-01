@@ -4,6 +4,8 @@ enum class TransactionType {
     EXPENSE,
     INCOME,
     LENT,
-    BORROWED
+    BORROWED,
+    SAVINGS_DEPOSIT,
+    SAVINGS_WITHDRAW
 }
 

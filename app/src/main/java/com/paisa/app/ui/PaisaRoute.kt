@@ -142,6 +142,9 @@ fun PaisaRoute(
         onUpdate = viewModel::updateTransaction,
         editTransactionId = editTransactionId,
         onEditTransactionHandled = onEditTransactionHandled,
-        onVoiceClick = triggerVoiceInput
+        onVoiceClick = triggerVoiceInput,
+        onSavingsPercentageChange = viewModel::updateSavingsPercentage,
+        onSavingsDeposit = viewModel::depositToSavings,
+        onSavingsWithdraw = viewModel::withdrawFromSavings
     )
 }

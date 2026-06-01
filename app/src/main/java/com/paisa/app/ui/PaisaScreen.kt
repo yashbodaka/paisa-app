@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -58,6 +59,7 @@ private enum class PaisaTab(val label: String, val iconRes: Int) {
     Home("Home", R.drawable.ic_home_handdrawn),
     History("History", R.drawable.ic_history_handdrawn),
     Insights("Insights", R.drawable.ic_insights_handdrawn),
+    Savings("Savings", R.drawable.ic_savings_handdrawn),
     People("People", R.drawable.ic_people_handdrawn)
 }
 
@@ -171,7 +173,10 @@ fun HandDrawnBox(
 }
 
 @Composable
-private fun CustomHeader(summary: com.paisa.app.domain.MoneySummary) {
+private fun CustomHeader(
+    summary: com.paisa.app.domain.MoneySummary,
+    totalSavingsPaise: Long = 0
+) {
     HandDrawnBox(
         modifier = Modifier.fillMaxWidth().height(120.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -202,11 +207,19 @@ private fun CustomHeader(summary: com.paisa.app.domain.MoneySummary) {
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                val disposableBalance = summary.totalBalancePaise - totalSavingsPaise
                 Text(
-                    text = summary.totalBalancePaise.formatSignedInr(),
+                    text = disposableBalance.formatSignedInr(),
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (summary.totalBalancePaise >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    color = if (disposableBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                 )
+                if (totalSavingsPaise > 0L) {
+                    Text(
+                        text = "Saved: ${totalSavingsPaise.formatInr()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -223,7 +236,10 @@ fun PaisaScreen(
     onUpdate: (MoneyTransaction) -> Unit,
     onVoiceClick: () -> Unit,
     editTransactionId: Long? = null,
-    onEditTransactionHandled: () -> Unit = {}
+    onEditTransactionHandled: () -> Unit = {},
+    onSavingsPercentageChange: (Int) -> Unit = {},
+    onSavingsDeposit: (Long, String) -> Unit = { _, _ -> },
+    onSavingsWithdraw: (Long, String) -> Unit = { _, _ -> }
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(PaisaTab.Home) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -266,7 +282,7 @@ fun PaisaScreen(
         } else {
             Scaffold(
                 topBar = {
-                    CustomHeader(summary = state.summary)
+                    CustomHeader(summary = state.summary, totalSavingsPaise = state.totalSavingsPaise)
                 },
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
@@ -320,6 +336,14 @@ fun PaisaScreen(
                         PaisaTab.People -> PeopleContent(
                             modifier = Modifier,
                             people = state.people
+                        )
+
+                        PaisaTab.Savings -> SavingsContent(
+                            modifier = Modifier,
+                            state = state,
+                            onSavingsPercentageChange = onSavingsPercentageChange,
+                            onSavingsDeposit = onSavingsDeposit,
+                            onSavingsWithdraw = onSavingsWithdraw
                         )
                     }
                 }
@@ -1814,7 +1838,15 @@ private fun TransactionRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_home_handdrawn),
+                    painter = painterResource(
+                        when (transaction.type) {
+                            TransactionType.SAVINGS_DEPOSIT,
+                            TransactionType.SAVINGS_WITHDRAW -> R.drawable.ic_savings_handdrawn
+                            TransactionType.LENT,
+                            TransactionType.BORROWED -> R.drawable.ic_people_handdrawn
+                            else -> R.drawable.ic_home_handdrawn
+                        }
+                    ),
                     contentDescription = null,
                     modifier = Modifier.size(22.dp),
                     tint = when (transaction.type) {
@@ -1822,6 +1854,8 @@ private fun TransactionRow(
                         TransactionType.LENT -> MaterialTheme.colorScheme.tertiary
                         TransactionType.BORROWED -> MaterialTheme.colorScheme.secondary
                         TransactionType.EXPENSE -> MaterialTheme.colorScheme.onSurfaceVariant
+                        TransactionType.SAVINGS_DEPOSIT -> MaterialTheme.colorScheme.primary
+                        TransactionType.SAVINGS_WITHDRAW -> MaterialTheme.colorScheme.secondary
                     }
                 )
                 Spacer(Modifier.size(12.dp))
@@ -1914,6 +1948,8 @@ private fun MoneyTransaction.signedAmount(): String {
         TransactionType.BORROWED -> amountPaise.formatSignedInr()
         TransactionType.EXPENSE -> "-" + amountPaise.formatInr()
         TransactionType.LENT -> "-" + amountPaise.formatInr()
+        TransactionType.SAVINGS_DEPOSIT -> "-" + amountPaise.formatInr()
+        TransactionType.SAVINGS_WITHDRAW -> "+" + amountPaise.formatInr()
     }
 }
 
@@ -1923,6 +1959,8 @@ private fun MoneyTransaction.amountColor() = when (type) {
     TransactionType.BORROWED -> MaterialTheme.colorScheme.secondary
     TransactionType.EXPENSE -> MaterialTheme.colorScheme.onSurface
     TransactionType.LENT -> MaterialTheme.colorScheme.tertiary
+    TransactionType.SAVINGS_DEPOSIT -> MaterialTheme.colorScheme.primary
+    TransactionType.SAVINGS_WITHDRAW -> MaterialTheme.colorScheme.secondary
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2155,6 +2193,412 @@ fun AudioWaveformIndicator(
                 cap = StrokeCap.Round
             )
         }
+    }
+}
+
+@Composable
+private fun SavingsContent(
+    modifier: Modifier,
+    state: PaisaUiState,
+    onSavingsPercentageChange: (Int) -> Unit,
+    onSavingsDeposit: (Long, String) -> Unit,
+    onSavingsWithdraw: (Long, String) -> Unit
+) {
+    val outlineColor = MaterialTheme.colorScheme.outline
+    
+    var triggerWobble by remember { mutableStateOf(0) }
+    val wobbleScale by animateFloatAsState(
+        targetValue = if (triggerWobble % 2 == 1) 1.08f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "wobble_scale"
+    )
+    val wobbleRotation by animateFloatAsState(
+        targetValue = if (triggerWobble == 0) 0f else if (triggerWobble % 2 == 1) -5f else 5f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioHighBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "wobble_rotation"
+    )
+
+    var showDepositDialog by remember { mutableStateOf(false) }
+    var showWithdrawDialog by remember { mutableStateOf(false) }
+    var depositAmountStr by remember { mutableStateOf("") }
+    var depositNoteStr by remember { mutableStateOf("") }
+    var withdrawAmountStr by remember { mutableStateOf("") }
+    var withdrawNoteStr by remember { mutableStateOf("") }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HandDrawnBox(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            rotation = -0.5f,
+            seed = 88
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Locked Savings Pool",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    state.totalSavingsPaise.formatInr(),
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Safely hidden from your primary Wallet balance.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .graphicsLayer {
+                    scaleX = wobbleScale
+                    scaleY = wobbleScale
+                    rotationZ = wobbleRotation
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        triggerWobble++
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val cx = w / 2f
+                val cy = h / 2f
+                
+                val jarPath = Path()
+                
+                val neckL = Offset(cx - 50.dp.toPx(), cy - 70.dp.toPx())
+                val neckR = Offset(cx + 50.dp.toPx(), cy - 70.dp.toPx())
+                val shoulderL = Offset(cx - 60.dp.toPx(), cy - 40.dp.toPx())
+                val shoulderR = Offset(cx + 60.dp.toPx(), cy - 40.dp.toPx())
+                val baseL = Offset(cx - 75.dp.toPx(), cy + 70.dp.toPx())
+                val baseR = Offset(cx + 75.dp.toPx(), cy + 70.dp.toPx())
+
+                jarPath.moveTo(neckL.x, neckL.y)
+                jarPath.lineTo(neckR.x, neckR.y)
+                jarPath.quadraticBezierTo(cx + 55.dp.toPx(), cy - 55.dp.toPx(), shoulderR.x, shoulderR.y)
+                jarPath.lineTo(baseR.x, baseR.y)
+                jarPath.lineTo(baseL.x, baseL.y)
+                jarPath.lineTo(shoulderL.x, shoulderL.y)
+                jarPath.quadraticBezierTo(cx - 55.dp.toPx(), cy - 55.dp.toPx(), neckL.x, neckL.y)
+                
+                val fillRatio = (state.totalSavingsPaise / 1000000f).coerceIn(0f, 0.95f)
+                if (fillRatio > 0f) {
+                    val fillHeight = (baseL.y - shoulderL.y) * fillRatio
+                    val fillTopY = baseL.y - fillHeight
+                    
+                    val goldFillPath = Path()
+                    goldFillPath.moveTo(baseL.x + 2.dp.toPx(), baseL.y - 2.dp.toPx())
+                    goldFillPath.lineTo(baseR.x - 2.dp.toPx(), baseR.y - 2.dp.toPx())
+                    
+                    goldFillPath.lineTo(
+                        cx + (baseR.x - cx) * (1f - fillRatio * 0.15f) - 2.dp.toPx(),
+                        fillTopY
+                    )
+                    goldFillPath.quadraticBezierTo(
+                        cx,
+                        fillTopY + (if (triggerWobble % 2 == 1) -5.dp.toPx() else 5.dp.toPx()),
+                        cx - (cx - baseL.x) * (1f - fillRatio * 0.15f) + 2.dp.toPx(),
+                        fillTopY
+                    )
+                    goldFillPath.close()
+                    
+                    drawPath(
+                        path = goldFillPath,
+                        color = Color(0xFFFFD54F).copy(alpha = 0.5f),
+                        style = Fill
+                    )
+                    
+                    val coinCount = (state.totalSavingsPaise / 50000L).toInt().coerceIn(0, 15)
+                    val coinRandom = java.util.Random(99L)
+                    for (i in 0 until coinCount) {
+                        val coinX = cx + (coinRandom.nextFloat() - 0.5f) * 80.dp.toPx() * (1f - fillRatio * 0.2f)
+                        val coinY = baseL.y - 12.dp.toPx() - coinRandom.nextFloat() * (fillHeight - 12.dp.toPx()).coerceAtLeast(0f)
+                        
+                        drawCircle(
+                            color = Color(0xFFFFB300),
+                            radius = 10.dp.toPx(),
+                            center = Offset(coinX, coinY),
+                            style = Fill
+                        )
+                        drawCircle(
+                            color = outlineColor.copy(alpha = 0.5f),
+                            radius = 10.dp.toPx(),
+                            center = Offset(coinX, coinY),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                        drawLine(
+                            color = outlineColor.copy(alpha = 0.6f),
+                            start = Offset(coinX - 4.dp.toPx(), coinY),
+                            end = Offset(coinX + 4.dp.toPx(), coinY),
+                            strokeWidth = 1.5.dp.toPx()
+                        )
+                    }
+                }
+
+                for (pass in 0 until 2) {
+                    val passRandom = java.util.Random(pass + 42L)
+                    val offsetX = (passRandom.nextFloat() - 0.5f) * 2f
+                    val offsetY = (passRandom.nextFloat() - 0.5f) * 2f
+                    
+                    drawContext.canvas.save()
+                    drawContext.canvas.translate(offsetX, offsetY)
+                    
+                    drawPath(
+                        path = jarPath,
+                        color = outlineColor.copy(alpha = 0.6f + pass * 0.2f),
+                        style = Stroke(
+                            width = (2f + passRandom.nextFloat() * 1.5f).dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                    drawContext.canvas.restore()
+                }
+            }
+            Text(
+                "Tap to Shake",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)
+            )
+        }
+
+        HandDrawnBox(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            rotation = 0.4f,
+            seed = 44
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Auto-Savings Rule",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Set a percentage of incoming income to automatically pay yourself first. Deducted from disposable wallet balance.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf(0, 10, 20, 30, 50).forEach { pct ->
+                        val isSelected = state.savingsPercentage == pct
+                        Surface(
+                            onClick = { onSavingsPercentageChange(pct) },
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = HandDrawnShapeChip,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 2.dp)
+                                .bouncyClickable { onSavingsPercentageChange(pct) }
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "$pct%",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        HandDrawnBox(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            rotation = -0.4f,
+            seed = 22
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    "Manual Adjustments",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = { showDepositDialog = true },
+                        modifier = Modifier.weight(1f).bouncyClickable { showDepositDialog = true },
+                        shape = HandDrawnShapeChip,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Deposit Cash", fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showWithdrawDialog = true },
+                        modifier = Modifier.weight(1f).bouncyClickable { showWithdrawDialog = true },
+                        shape = HandDrawnShapeChip,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Withdraw Cash", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDepositDialog) {
+        AlertDialog(
+            onDismissRequest = { showDepositDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = depositAmountStr.toLongOrNull()?.times(100L)
+                        if (amt != null && amt > 0L) {
+                            onSavingsDeposit(amt, depositNoteStr)
+                            showDepositDialog = false
+                            depositAmountStr = ""
+                            depositNoteStr = ""
+                        }
+                    },
+                    modifier = Modifier.bouncyClickable {
+                        val amt = depositAmountStr.toLongOrNull()?.times(100L)
+                        if (amt != null && amt > 0L) {
+                            onSavingsDeposit(amt, depositNoteStr)
+                            showDepositDialog = false
+                            depositAmountStr = ""
+                            depositNoteStr = ""
+                        }
+                    },
+                    shape = HandDrawnShapeChip
+                ) {
+                    Text("Confirm Deposit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDepositDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            title = {
+                Text("Deposit to Savings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter amount to deduct from Wallet and move to Savings lockbox:")
+                    OutlinedTextField(
+                        value = depositAmountStr,
+                        onValueChange = { depositAmountStr = it.filter { c -> c.isDigit() } },
+                        label = { Text("Amount (₹)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = depositNoteStr,
+                        onValueChange = { depositNoteStr = it },
+                        label = { Text("Note (e.g. Monthly cut)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        )
+    }
+
+    if (showWithdrawDialog) {
+        AlertDialog(
+            onDismissRequest = { showWithdrawDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = withdrawAmountStr.toLongOrNull()?.times(100L)
+                        if (amt != null && amt > 0L && amt <= state.totalSavingsPaise) {
+                            onSavingsWithdraw(amt, withdrawNoteStr)
+                            showWithdrawDialog = false
+                            withdrawAmountStr = ""
+                            withdrawNoteStr = ""
+                        }
+                    },
+                    modifier = Modifier.bouncyClickable {
+                        val amt = withdrawAmountStr.toLongOrNull()?.times(100L)
+                        if (amt != null && amt > 0L && amt <= state.totalSavingsPaise) {
+                            onSavingsWithdraw(amt, withdrawNoteStr)
+                            showWithdrawDialog = false
+                            withdrawAmountStr = ""
+                            withdrawNoteStr = ""
+                        }
+                    },
+                    shape = HandDrawnShapeChip
+                ) {
+                    Text("Confirm Withdrawal")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWithdrawDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            title = {
+                Text("Withdraw from Savings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter amount to move back to primary spending Wallet balance:")
+                    OutlinedTextField(
+                        value = withdrawAmountStr,
+                        onValueChange = { withdrawAmountStr = it.filter { c -> c.isDigit() } },
+                        label = { Text("Amount (₹)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = withdrawNoteStr,
+                        onValueChange = { withdrawNoteStr = it },
+                        label = { Text("Note (e.g. Emergency)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        )
     }
 }
 

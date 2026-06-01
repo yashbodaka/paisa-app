@@ -24,6 +24,15 @@ import kotlinx.coroutines.launch
 
 class PaisaViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = MoneyRepository(PaisaDatabase.getDatabase(application).transactionDao())
+    private val prefs = application.getSharedPreferences("paisa_prefs", android.content.Context.MODE_PRIVATE)
+    private val savingsPercentageFlow = MutableStateFlow(prefs.getInt("savings_percentage", 20))
+
+    fun getSavingsPercentage(): Int = savingsPercentageFlow.value
+
+    fun updateSavingsPercentage(value: Int) {
+        prefs.edit().putInt("savings_percentage", value).apply()
+        savingsPercentageFlow.value = value
+    }
     private val parser = MoneyParser()
     private val draft = MutableStateFlow("")
     private val isListening = MutableStateFlow(false)
@@ -43,8 +52,13 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
 
     val uiState: StateFlow<PaisaUiState> = combine(
         combine(repository.observeTransactions(), draft, isListening) { txns, d, l -> Triple(txns, d, l) },
-        combine(isTranscribing, message, isLoading) { t, m, i -> Triple(t, m, i) }
-    ) { (txns, currentDraft, listening), (transcribing, currentMessage, loading) ->
+        combine(isTranscribing, message, isLoading) { t, m, i -> Triple(t, m, i) },
+        savingsPercentageFlow
+    ) { (txns, currentDraft, listening), (transcribing, currentMessage, loading), percent ->
+        val deposits = txns.filter { it.type == TransactionType.SAVINGS_DEPOSIT }.sumOf { it.amountPaise }
+        val withdraws = txns.filter { it.type == TransactionType.SAVINGS_WITHDRAW }.sumOf { it.amountPaise }
+        val totalSavings = (deposits - withdraws).coerceAtLeast(0L)
+
         PaisaUiState(
             draft = currentDraft,
             isListening = listening,
@@ -54,7 +68,9 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
             summary = SummaryCalculator.buildSummary(txns),
             people = SummaryCalculator.peopleBalances(txns),
             suggestions = buildSuggestions(txns),
-            message = currentMessage
+            message = currentMessage,
+            savingsPercentage = percent,
+            totalSavingsPaise = totalSavings
         )
     }.stateIn(
         scope = viewModelScope,
@@ -100,7 +116,7 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
         when (val result = parser.parse(text, nlpAmount, nlpCategorizer)) {
             is ParseResult.Error -> message.value = result.message
             is ParseResult.Success -> viewModelScope.launch {
-                repository.add(result.entry)
+                insertAndAutoSave(result.entry)
                 draft.value = ""
                 message.value = "Logged ${result.entry.amountPaise.formatInr()}"
             }
@@ -145,7 +161,7 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
                                         val existing = repository.getTransactions()
                                         val already = existing.any { t -> t.amountPaise == result.entry.amountPaise && t.rawText == result.entry.rawText }
                                         if (!already) {
-                                            repository.add(result.entry)
+                                            insertAndAutoSave(result.entry)
                                             count++
                                         }
                                     }
@@ -192,6 +208,58 @@ class PaisaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.update(transaction)
             message.value = "Updated entry"
+        }
+    }
+
+    private suspend fun insertAndAutoSave(entry: com.paisa.app.domain.ParsedMoneyEntry): Long {
+        val id = repository.add(entry)
+        if (entry.type == TransactionType.INCOME) {
+            val savingsPercent = getSavingsPercentage()
+            if (savingsPercent > 0) {
+                val savingsAmount = entry.amountPaise * savingsPercent / 100
+                if (savingsAmount > 0L) {
+                    repository.addTransaction(
+                        MoneyTransaction(
+                            amountPaise = savingsAmount,
+                            type = TransactionType.SAVINGS_DEPOSIT,
+                            category = "Savings",
+                            note = "Auto-save $savingsPercent% from Income",
+                            rawText = "Auto-saved from: ${entry.rawText}"
+                        )
+                    )
+                }
+            }
+        }
+        return id
+    }
+
+    fun depositToSavings(amountPaise: Long, note: String) {
+        viewModelScope.launch {
+            repository.addTransaction(
+                MoneyTransaction(
+                    amountPaise = amountPaise,
+                    type = TransactionType.SAVINGS_DEPOSIT,
+                    category = "Savings",
+                    note = note.ifBlank { "Manual Deposit" },
+                    rawText = "Manual savings deposit"
+                )
+            )
+            message.value = "Deposited ${amountPaise.formatInr()} to Savings"
+        }
+    }
+
+    fun withdrawFromSavings(amountPaise: Long, note: String) {
+        viewModelScope.launch {
+            repository.addTransaction(
+                MoneyTransaction(
+                    amountPaise = amountPaise,
+                    type = TransactionType.SAVINGS_WITHDRAW,
+                    category = "Savings",
+                    note = note.ifBlank { "Manual Withdrawal" },
+                    rawText = "Manual savings withdrawal"
+                )
+            )
+            message.value = "Withdrew ${amountPaise.formatInr()} from Savings"
         }
     }
 

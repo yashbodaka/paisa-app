@@ -13,6 +13,7 @@ data class PaisaUiState(
     val summary: MoneySummary = MoneySummary(),
     val people: List<PersonBalance> = emptyList(),
     val suggestions: List<String> = emptyList(),
-    val message: String? = null
+    val message: String? = null,
+    val savingsPercentage: Int = 20,
+    val totalSavingsPaise: Long = 0
 )
-
