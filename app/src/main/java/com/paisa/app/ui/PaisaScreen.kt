@@ -438,6 +438,15 @@ private fun QuickEntry(
         ),
         label = "pulse"
     )
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot_alpha"
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HandDrawnBox(
@@ -445,28 +454,50 @@ private fun QuickEntry(
             rotation = 0.5f,
             seed = 42
         ) {
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = if (isTranscribing) "Transcribing…" else draft,
-                onValueChange = if (isTranscribing) { _ -> } else onDraftChange,
-                placeholder = { Text("200 food, 300 to Rahul", style = MaterialTheme.typography.bodyLarge) },
-                singleLine = true,
-                enabled = !isTranscribing,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    disabledBorderColor = Color.Transparent,
-                    disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-                trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (isListening || isTranscribing) {
+            AnimatedContent(
+                targetState = (isListening || isTranscribing),
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(250)) togetherWith fadeOut(animationSpec = tween(200))
+                },
+                label = "input_mode"
+            ) { voiceModeActive ->
+                if (voiceModeActive) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .graphicsLayer { alpha = dotAlpha }
+                                .drawBehind {
+                                    drawCircle(
+                                        color = if (isTranscribing) Color(0xFFFF8F00) else Color(0xFFE53935)
+                                    )
+                                }
+                        )
+
+                        Text(
+                            text = if (isTranscribing) "Processing…" else "Hearing…",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (isTranscribing) Color(0xFFFF8F00) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.widthIn(max = 95.dp)
+                        )
+
+                        AudioWaveformIndicator(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(30.dp),
+                            color = if (isTranscribing) Color(0xFFFF8F00) else MaterialTheme.colorScheme.primary,
+                            isProcessing = isTranscribing
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(contentAlignment = Alignment.Center) {
                                 val ringColor = if (isTranscribing) Color(0xFFFF8F00) else Color(0xFF5D4037)
                                 Box(
                                     modifier = Modifier
@@ -480,39 +511,68 @@ private fun QuickEntry(
                                             drawCircle(color = ringColor, alpha = 0.25f)
                                         }
                                 )
-                            }
-                            IconButton(
-                                onClick = {},
-                                enabled = !isTranscribing,
-                                modifier = Modifier.bouncyClickable(enabled = !isTranscribing) {
-                                    if (!isTranscribing) onVoiceClick()
-                                }
-                            ) {
-                                Icon(
-                                    painterResource(R.drawable.ic_mic_handdrawn),
-                                    contentDescription = when {
-                                        isTranscribing -> "Transcribing"
-                                        isListening -> "Stop recording"
-                                        else -> "Speak entry"
-                                    },
-                                    modifier = Modifier.size(24.dp),
-                                    tint = when {
-                                        isTranscribing -> Color(0xFFFF8F00)
-                                        isListening -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.onSurface
+                                IconButton(
+                                    onClick = {},
+                                    enabled = !isTranscribing,
+                                    modifier = Modifier.bouncyClickable(enabled = !isTranscribing) {
+                                        if (!isTranscribing) onVoiceClick()
                                     }
-                                )
+                                ) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_mic_handdrawn),
+                                        contentDescription = if (isTranscribing) "Transcribing" else "Stop recording",
+                                        modifier = Modifier.size(24.dp),
+                                        tint = if (isTranscribing) Color(0xFFFF8F00) else MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
-                        }
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier.bouncyClickable { onSubmit() }
-                        ) {
-                            Icon(painterResource(R.drawable.ic_send_handdrawn), contentDescription = "Log entry", modifier = Modifier.size(24.dp))
                         }
                     }
+                } else {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = draft,
+                        onValueChange = onDraftChange,
+                        placeholder = { Text("200 food, 300 to Rahul", style = MaterialTheme.typography.bodyLarge) },
+                        singleLine = true,
+                        enabled = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent,
+                            disabledBorderColor = Color.Transparent,
+                            disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    IconButton(
+                                        onClick = {},
+                                        modifier = Modifier.bouncyClickable { onVoiceClick() }
+                                    ) {
+                                        Icon(
+                                            painterResource(R.drawable.ic_mic_handdrawn),
+                                            contentDescription = "Speak entry",
+                                            modifier = Modifier.size(24.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {},
+                                    modifier = Modifier.bouncyClickable { onSubmit() }
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_send_handdrawn), contentDescription = "Log entry", modifier = Modifier.size(24.dp))
+                                }
+                            }
+                        }
+                    )
                 }
-            )
+            }
         }
         Text(
             text = when {
@@ -1707,6 +1767,67 @@ fun ScribbleCircularLoader(
                 cap = StrokeCap.Round
             )
         )
+    }
+}
+
+@Composable
+fun AudioWaveformIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    barWidth: androidx.compose.ui.unit.Dp = 3.dp,
+    gap: androidx.compose.ui.unit.Dp = 3.dp,
+    isProcessing: Boolean = false
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "audio_wave")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val barWidthPx = with(density) { barWidth.toPx() }
+    val gapPx = with(density) { gap.toPx() }
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val centerY = h / 2f
+        val maxBarHeight = h * 0.9f
+        val minBarHeight = h * 0.2f
+
+        val stepPx = barWidthPx + gapPx
+        val barCount = (w / stepPx).toInt().coerceAtLeast(5)
+
+        for (i in 0 until barCount) {
+            val progress = i.toFloat() / barCount.toFloat()
+            val wave1 = Math.sin((phase + progress * 3 * Math.PI)).toFloat()
+            val wave2 = Math.cos((phase * 1.8 + progress * 5f)).toFloat()
+            val combinedWave = (wave1 + wave2) / 2f
+
+            val amplitude = if (isProcessing) {
+                0.3f + 0.7f * Math.abs(Math.sin((phase + progress * 2f * Math.PI)).toFloat())
+            } else {
+                0.2f + 0.8f * Math.abs(combinedWave)
+            }
+
+            val barHeight = minBarHeight + (maxBarHeight - minBarHeight) * amplitude
+            val x = i * stepPx + barWidthPx / 2f
+            val startY = centerY - barHeight / 2f
+            val endY = centerY + barHeight / 2f
+
+            drawLine(
+                color = color,
+                start = Offset(x, startY),
+                end = Offset(x, endY),
+                strokeWidth = barWidthPx,
+                cap = StrokeCap.Round
+            )
+        }
     }
 }
 
