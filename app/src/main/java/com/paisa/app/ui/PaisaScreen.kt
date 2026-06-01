@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +50,7 @@ import com.paisa.app.data.TransactionType
 import com.paisa.app.domain.PersonBalance
 import com.paisa.app.domain.formatInr
 import com.paisa.app.domain.formatSignedInr
+import kotlinx.coroutines.launch
 import com.paisa.app.ui.theme.bouncyClickable
 import java.time.Instant
 import java.time.ZoneId
@@ -564,12 +566,13 @@ private fun QuickEntry(
                                             drawCircle(color = ringColor, alpha = 0.25f)
                                         }
                                 )
-                                IconButton(
-                                    onClick = {},
-                                    enabled = !isTranscribing,
-                                    modifier = Modifier.bouncyClickable(enabled = !isTranscribing) {
-                                        if (!isTranscribing) onVoiceClick()
-                                    }
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .bouncyClickable(enabled = !isTranscribing) {
+                                            if (!isTranscribing) onVoiceClick()
+                                        }
                                 ) {
                                     Icon(
                                         painterResource(R.drawable.ic_mic_handdrawn),
@@ -603,9 +606,11 @@ private fun QuickEntry(
                         trailingIcon = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    IconButton(
-                                        onClick = {},
-                                        modifier = Modifier.bouncyClickable { onVoiceClick() }
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .bouncyClickable { onVoiceClick() }
                                     ) {
                                         Icon(
                                             painterResource(R.drawable.ic_mic_handdrawn),
@@ -615,9 +620,11 @@ private fun QuickEntry(
                                         )
                                     }
                                 }
-                                IconButton(
-                                    onClick = {},
-                                    modifier = Modifier.bouncyClickable { onSubmit() }
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .bouncyClickable { onSubmit() }
                                 ) {
                                     Icon(painterResource(R.drawable.ic_send_handdrawn), contentDescription = "Log entry", modifier = Modifier.size(24.dp))
                                 }
@@ -1114,6 +1121,9 @@ private fun InsightsHeroCard(
     topCategory: String,
     comparison: String = ""
 ) {
+    val darkEspresso = Color(0xFF261D1A)
+    val mediumCoffee = Color(0xFF5D4037)
+
     HandDrawnBox(
         modifier = modifier,
         containerColor = Color(0xFFEDE4D3),
@@ -1146,7 +1156,7 @@ private fun InsightsHeroCard(
                     Text(
                         "Insight Brief",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        color = mediumCoffee.copy(alpha = 0.8f)
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1155,27 +1165,27 @@ private fun InsightsHeroCard(
                         if (comparison.isNotBlank()) {
                             val isNegative = comparison.contains("↓")
                             Surface(
-                                color = if (isNegative) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                color = if (isNegative) Color(0xFFEFEBE9) else Color(0xFFF9DEDC),
                                 shape = HandDrawnShapeChip
                             ) {
                                 Text(
                                     comparison,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isNegative) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    color = if (isNegative) mediumCoffee else Color(0xFF8C1D18),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                         Surface(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            color = Color.White.copy(alpha = 0.6f),
                             shape = HandDrawnShapeChip
                         ) {
                             Text(
                                 periodLabel,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = darkEspresso
                             )
                         }
                     }
@@ -1184,20 +1194,20 @@ private fun InsightsHeroCard(
                 Text(
                     amount,
                     style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = mediumCoffee,
                     fontWeight = FontWeight.Black
                 )
 
                 Text(
                     insight,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = darkEspresso
                 )
 
                 Text(
                     "Focus area: $topCategory",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = mediumCoffee
                 )
             }
         }
@@ -2234,6 +2244,7 @@ private fun SavingsContent(
 ) {
     val outlineColor = MaterialTheme.colorScheme.outline
     
+    val scope = rememberCoroutineScope()
     var triggerWobble by remember { mutableStateOf(0) }
     val wobbleScale by animateFloatAsState(
         targetValue = if (triggerWobble % 2 == 1) 1.08f else 1f,
@@ -2250,6 +2261,32 @@ private fun SavingsContent(
             stiffness = Spring.StiffnessMedium
         ),
         label = "wobble_rotation"
+    )
+
+    var triggerFrogJump by remember { mutableStateOf(0) }
+    val frogJumpYDp by animateFloatAsState(
+        targetValue = if (triggerFrogJump % 2 == 1) -16f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "frog_jump"
+    )
+    val frogScaleX by animateFloatAsState(
+        targetValue = if (triggerFrogJump % 2 == 1) 0.82f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "frog_scale_x"
+    )
+    val frogScaleY by animateFloatAsState(
+        targetValue = if (triggerFrogJump % 2 == 1) 1.25f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "frog_scale_y"
     )
 
     var showDepositDialog by remember { mutableStateOf(false) }
@@ -2300,85 +2337,37 @@ private fun SavingsContent(
         Box(
             modifier = Modifier
                 .size(240.dp)
-                .graphicsLayer {
-                    scaleX = wobbleScale
-                    scaleY = wobbleScale
-                    rotationZ = wobbleRotation
-                }
                 .pointerInput(Unit) {
-                    detectTapGestures {
-                        triggerWobble++
+                    detectTapGestures { offset ->
+                        val w = size.width
+                        // Frog is on the left side (x < 42% of canvas width)
+                        if (offset.x < w * 0.42f) {
+                            scope.launch {
+                                triggerFrogJump = 1
+                                kotlinx.coroutines.delay(220)
+                                triggerFrogJump = 0
+                            }
+                        } else {
+                            triggerWobble++
+                        }
                     }
                 },
             contentAlignment = Alignment.Center
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            // 1. Gullak (Jar + Coins) with its wobble graphicsLayer
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = wobbleScale
+                        scaleY = wobbleScale
+                        rotationZ = wobbleRotation
+                    }
+            ) {
                 val w = size.width
                 val h = size.height
                 val cx = w / 2f
                 val cy = h / 2f
-                
-                // 🐸 "Gullak" the Coin Pet Frog sitting next to the jar
-                val fx = cx - 94.dp.toPx()
-                val fy = cy + 56.dp.toPx()
-                val frogRadius = 16.dp.toPx()
-                
-                // Draw frog body fill (mocha/tan cream matching secondaryContainer)
-                drawCircle(
-                    color = Color(0xFFF5EEDC),
-                    radius = frogRadius,
-                    center = Offset(fx, fy)
-                )
-                
-                // Draw wobbly frog outline (outlineColor)
-                drawCircle(
-                    color = outlineColor.copy(alpha = 0.8f),
-                    radius = frogRadius,
-                    center = Offset(fx, fy),
-                    style = Stroke(width = 2.dp.toPx())
-                )
-                
-                // Draw eyes (bulging circles)
-                val eyeL = Offset(fx - 7.dp.toPx(), fy - 14.dp.toPx())
-                val eyeR = Offset(fx + 7.dp.toPx(), fy - 14.dp.toPx())
-                val eyeRadius = 5.dp.toPx()
-                
-                // Eye fills
-                drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeL)
-                drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeR)
-                // Eye outlines
-                drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeL, style = Stroke(width = 1.5.dp.toPx()))
-                drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeR, style = Stroke(width = 1.5.dp.toPx()))
-                // Pupils (black dots)
-                drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeL)
-                drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeR)
-                
-                // Smiling mouth
-                val mouthPath = Path().apply {
-                    moveTo(fx - 7.dp.toPx(), fy + 2.dp.toPx())
-                    quadraticBezierTo(fx, fy + 8.dp.toPx(), fx + 7.dp.toPx(), fy + 2.dp.toPx())
-                }
-                drawPath(
-                    path = mouthPath,
-                    color = outlineColor,
-                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                )
-                
-                // Rosy cheeks
-                drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx - 10.dp.toPx(), fy + 1.dp.toPx()))
-                drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx + 10.dp.toPx(), fy + 1.dp.toPx()))
-                
-                // Little frog legs/feet at the base
-                val legL = Path().apply {
-                    moveTo(fx - 12.dp.toPx(), fy + 12.dp.toPx())
-                    quadraticBezierTo(fx - 18.dp.toPx(), fy + 16.dp.toPx(), fx - 16.dp.toPx(), fy + 16.dp.toPx())
-                }
-                val legR = Path().apply {
-                    moveTo(fx + 12.dp.toPx(), fy + 12.dp.toPx())
-                    quadraticBezierTo(fx + 18.dp.toPx(), fy + 16.dp.toPx(), fx + 16.dp.toPx(), fy + 16.dp.toPx())
-                }
-                drawPath(path = legL, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-                drawPath(path = legR, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
                 
                 val jarPath = Path()
                 
@@ -2469,6 +2458,86 @@ private fun SavingsContent(
                         )
                     )
                     drawContext.canvas.restore()
+                }
+            }
+
+            // 2. Frog with its INDEPENDENT jumping & squishing animations
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val w = size.width
+                val h = size.height
+                val cx = w / 2f
+                val cy = h / 2f
+                
+                // 🐸 "Gullak" the Coin Pet Frog
+                val fx = cx - 94.dp.toPx()
+                val fy = cy + 56.dp.toPx()
+                val frogRadius = 16.dp.toPx()
+                val frogJumpYPx = frogJumpYDp.dp.toPx()
+                
+                withTransform({
+                    // Vertically translate for jumping jump height
+                    translate(left = 0f, top = frogJumpYPx)
+                    // Squish and stretch scaling centered at frog bottom
+                    scale(scaleX = frogScaleX, scaleY = frogScaleY, pivot = Offset(fx, fy + frogRadius))
+                }) {
+                    // Draw frog body fill (mocha/tan cream matching secondaryContainer)
+                    drawCircle(
+                        color = Color(0xFFF5EEDC),
+                        radius = frogRadius,
+                        center = Offset(fx, fy)
+                    )
+                    
+                    // Draw wobbly frog outline (outlineColor)
+                    drawCircle(
+                        color = outlineColor.copy(alpha = 0.8f),
+                        radius = frogRadius,
+                        center = Offset(fx, fy),
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                    
+                    // Draw eyes (bulging circles)
+                    val eyeL = Offset(fx - 7.dp.toPx(), fy - 14.dp.toPx())
+                    val eyeR = Offset(fx + 7.dp.toPx(), fy - 14.dp.toPx())
+                    val eyeRadius = 5.dp.toPx()
+                    
+                    // Eye fills
+                    drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeL)
+                    drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeR)
+                    // Eye outlines
+                    drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeL, style = Stroke(width = 1.5.dp.toPx()))
+                    drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeR, style = Stroke(width = 1.5.dp.toPx()))
+                    // Pupils (black dots)
+                    drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeL)
+                    drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeR)
+                    
+                    // Smiling mouth
+                    val mouthPath = Path().apply {
+                        moveTo(fx - 7.dp.toPx(), fy + 2.dp.toPx())
+                        quadraticBezierTo(fx, fy + 8.dp.toPx(), fx + 7.dp.toPx(), fy + 2.dp.toPx())
+                    }
+                    drawPath(
+                        path = mouthPath,
+                        color = outlineColor,
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    
+                    // Rosy cheeks
+                    drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx - 10.dp.toPx(), fy + 1.dp.toPx()))
+                    drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx + 10.dp.toPx(), fy + 1.dp.toPx()))
+                    
+                    // Little frog legs/feet at the base
+                    val legL = Path().apply {
+                        moveTo(fx - 12.dp.toPx(), fy + 12.dp.toPx())
+                        quadraticBezierTo(fx - 18.dp.toPx(), fy + 16.dp.toPx(), fx - 16.dp.toPx(), fy + 16.dp.toPx())
+                    }
+                    val legR = Path().apply {
+                        moveTo(fx + 12.dp.toPx(), fy + 12.dp.toPx())
+                        quadraticBezierTo(fx + 18.dp.toPx(), fy + 16.dp.toPx(), fx + 16.dp.toPx(), fy + 16.dp.toPx())
+                    }
+                    drawPath(path = legL, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                    drawPath(path = legR, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
                 }
             }
             Text(

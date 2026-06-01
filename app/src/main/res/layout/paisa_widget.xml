@@ -22,7 +22,7 @@
             android:textSize="17sp"
             android:textStyle="bold"
             android:textColor="#4E342E"
-            android:fontFamily="sans-serif-condensed-medium" />
+            android:fontFamily="sans-serif" />
 
         <TextView
             android:id="@+id/widget_wallet_balance"
@@ -32,7 +32,7 @@
             android:textSize="15sp"
             android:textStyle="bold"
             android:textColor="#4E342E"
-            android:fontFamily="sans-serif-condensed-medium" />
+            android:fontFamily="sans-serif" />
     </LinearLayout>
 
     <!-- Stats & Subtitle -->
@@ -44,7 +44,7 @@
         android:text="Spent ₹0 today"
         android:textSize="12sp"
         android:textColor="#8D6E63"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif" />
 
     <!-- Divider Line -->
     <View
@@ -70,7 +70,7 @@
             android:text="No transactions logged today.\nTry typing '200 food' or tap mic!"
             android:textSize="12sp"
             android:textColor="#8D6E63"
-            android:fontFamily="sans-serif-light"
+            android:fontFamily="sans-serif"
             android:visibility="gone" />
 
         <!-- When has transaction, show this layout -->
@@ -121,7 +121,7 @@
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="#8C1D18"
-                android:fontFamily="sans-serif-condensed" />
+                android:fontFamily="sans-serif" />
         </LinearLayout>
     </FrameLayout>
 
@@ -158,7 +158,7 @@
                 android:textSize="13sp"
                 android:textStyle="bold"
                 android:textColor="#4E342E"
-                android:fontFamily="sans-serif-condensed" />
+                android:fontFamily="sans-serif" />
         </LinearLayout>
 
         <!-- Speak Entry Button -->
@@ -186,7 +186,7 @@
                 android:textSize="13sp"
                 android:textStyle="bold"
                 android:textColor="#4E342E"
-                android:fontFamily="sans-serif-condensed" />
+                android:fontFamily="sans-serif" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
