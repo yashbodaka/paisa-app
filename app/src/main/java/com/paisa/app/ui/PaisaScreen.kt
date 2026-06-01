@@ -177,6 +177,26 @@ private fun CustomHeader(
     summary: com.paisa.app.domain.MoneySummary,
     totalSavingsPaise: Long = 0
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "header_pulse")
+    val titleScale by infiniteTransition.animateFloat(
+        initialValue = 0.98f,
+        targetValue = 1.02f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "title_scale"
+    )
+    val balanceScale by infiniteTransition.animateFloat(
+        initialValue = 0.99f,
+        targetValue = 1.01f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "balance_scale"
+    )
+
     HandDrawnBox(
         modifier = Modifier.fillMaxWidth().height(120.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -192,7 +212,11 @@ private fun CustomHeader(
                 Text(
                     text = "Paisa",
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = titleScale
+                        scaleY = titleScale
+                    }
                 )
                 Text(
                     text = "Magic logbook",
@@ -211,7 +235,11 @@ private fun CustomHeader(
                 Text(
                     text = disposableBalance.formatSignedInr(),
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (disposableBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    color = if (disposableBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = balanceScale
+                        scaleY = balanceScale
+                    }
                 )
                 if (totalSavingsPaise > 0L) {
                     Text(
@@ -824,7 +852,7 @@ private fun InsightsContent(
         else -> "Your spending is spread evenly in this view."
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color(0xFFEDE4D3))) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1088,7 +1116,7 @@ private fun InsightsHeroCard(
 ) {
     HandDrawnBox(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.inverseSurface,
+        containerColor = Color(0xFFEDE4D3),
         rotation = -0.6f,
         seed = 42
     ) {
@@ -1097,12 +1125,12 @@ private fun InsightsHeroCard(
                 .fillMaxWidth()
                 .drawBehind {
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.08f),
+                        color = Color(0xFF5D4037).copy(alpha = 0.04f),
                         radius = size.width * 0.42f,
                         center = Offset(size.width * 0.9f, size.height * 0.08f)
                     )
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.05f),
+                        color = Color(0xFF5D4037).copy(alpha = 0.03f),
                         radius = size.width * 0.25f,
                         center = Offset(size.width * 0.08f, size.height * 0.95f)
                     )
@@ -1118,7 +1146,7 @@ private fun InsightsHeroCard(
                     Text(
                         "Insight Brief",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.78f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1127,27 +1155,27 @@ private fun InsightsHeroCard(
                         if (comparison.isNotBlank()) {
                             val isNegative = comparison.contains("↓")
                             Surface(
-                                color = if (isNegative) MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
+                                color = if (isNegative) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
                                 shape = HandDrawnShapeChip
                             ) {
                                 Text(
                                     comparison,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isNegative) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
+                                    color = if (isNegative) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                         Surface(
-                            color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.14f),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
                             shape = HandDrawnShapeChip
                         ) {
                             Text(
                                 periodLabel,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.inverseOnSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -1156,20 +1184,20 @@ private fun InsightsHeroCard(
                 Text(
                     amount,
                     style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Black
                 )
 
                 Text(
                     insight,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.inverseOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
                     "Focus area: $topCategory",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.72f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

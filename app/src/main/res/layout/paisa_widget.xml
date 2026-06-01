@@ -148,8 +148,7 @@
             <ImageView
                 android:layout_width="18dp"
                 android:layout_height="18dp"
-                android:src="@drawable/ic_home_handdrawn"
-                android:tint="#4E342E" />
+                android:src="@drawable/ic_home_handdrawn" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -177,8 +176,7 @@
             <ImageView
                 android:layout_width="18dp"
                 android:layout_height="18dp"
-                android:src="@drawable/ic_mic_handdrawn"
-                android:tint="#4E342E" />
+                android:src="@drawable/ic_mic_handdrawn" />
 
             <TextView
                 android:layout_width="wrap_content"
