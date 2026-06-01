@@ -824,7 +824,7 @@ private fun InsightsContent(
         else -> "Your spending is spread evenly in this view."
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().background(Color(0xFFEDE4D3))) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1127,14 +1127,14 @@ private fun InsightsHeroCard(
                         if (comparison.isNotBlank()) {
                             val isNegative = comparison.contains("↓")
                             Surface(
-                                color = if (isNegative) Color(0xFF2E7D32).copy(alpha = 0.25f) else Color(0xFFC62828).copy(alpha = 0.25f),
+                                color = if (isNegative) MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
                                 shape = HandDrawnShapeChip
                             ) {
                                 Text(
                                     comparison,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isNegative) Color(0xFF81C784) else Color(0xFFE57373),
+                                    color = if (isNegative) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -1581,7 +1581,7 @@ private fun DailySpendingLineChart(
                                 translate(rectLeft, rectTop)
                                 
                                 val fillPaint = android.graphics.Paint().apply {
-                                    color = android.graphics.Color.parseColor("#FFFDF6")
+                                    color = android.graphics.Color.parseColor("#EDE4D3")
                                     style = android.graphics.Paint.Style.FILL
                                 }
                                 drawPath(toolTipPath.asAndroidPath(), fillPaint)
@@ -2289,6 +2289,68 @@ private fun SavingsContent(
                 val h = size.height
                 val cx = w / 2f
                 val cy = h / 2f
+                
+                // 🐸 "Gullak" the Coin Pet Frog sitting next to the jar
+                val fx = cx - 94.dp.toPx()
+                val fy = cy + 56.dp.toPx()
+                val frogRadius = 16.dp.toPx()
+                
+                // Draw frog body fill (mocha/tan cream matching secondaryContainer)
+                drawCircle(
+                    color = Color(0xFFF5EEDC),
+                    radius = frogRadius,
+                    center = Offset(fx, fy)
+                )
+                
+                // Draw wobbly frog outline (outlineColor)
+                drawCircle(
+                    color = outlineColor.copy(alpha = 0.8f),
+                    radius = frogRadius,
+                    center = Offset(fx, fy),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+                
+                // Draw eyes (bulging circles)
+                val eyeL = Offset(fx - 7.dp.toPx(), fy - 14.dp.toPx())
+                val eyeR = Offset(fx + 7.dp.toPx(), fy - 14.dp.toPx())
+                val eyeRadius = 5.dp.toPx()
+                
+                // Eye fills
+                drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeL)
+                drawCircle(color = Color(0xFFF5EEDC), radius = eyeRadius, center = eyeR)
+                // Eye outlines
+                drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeL, style = Stroke(width = 1.5.dp.toPx()))
+                drawCircle(color = outlineColor.copy(alpha = 0.8f), radius = eyeRadius, center = eyeR, style = Stroke(width = 1.5.dp.toPx()))
+                // Pupils (black dots)
+                drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeL)
+                drawCircle(color = outlineColor, radius = 2.dp.toPx(), center = eyeR)
+                
+                // Smiling mouth
+                val mouthPath = Path().apply {
+                    moveTo(fx - 7.dp.toPx(), fy + 2.dp.toPx())
+                    quadraticBezierTo(fx, fy + 8.dp.toPx(), fx + 7.dp.toPx(), fy + 2.dp.toPx())
+                }
+                drawPath(
+                    path = mouthPath,
+                    color = outlineColor,
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                )
+                
+                // Rosy cheeks
+                drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx - 10.dp.toPx(), fy + 1.dp.toPx()))
+                drawCircle(color = Color(0xFFE57373).copy(alpha = 0.6f), radius = 2.5.dp.toPx(), center = Offset(fx + 10.dp.toPx(), fy + 1.dp.toPx()))
+                
+                // Little frog legs/feet at the base
+                val legL = Path().apply {
+                    moveTo(fx - 12.dp.toPx(), fy + 12.dp.toPx())
+                    quadraticBezierTo(fx - 18.dp.toPx(), fy + 16.dp.toPx(), fx - 16.dp.toPx(), fy + 16.dp.toPx())
+                }
+                val legR = Path().apply {
+                    moveTo(fx + 12.dp.toPx(), fy + 12.dp.toPx())
+                    quadraticBezierTo(fx + 18.dp.toPx(), fy + 16.dp.toPx(), fx + 16.dp.toPx(), fy + 16.dp.toPx())
+                }
+                drawPath(path = legL, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(path = legR, color = outlineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
                 
                 val jarPath = Path()
                 
